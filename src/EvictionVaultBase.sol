@@ -3,33 +3,33 @@ pragma solidity ^0.8.20;
 
 contract EvictionVaultBase {
     struct Transaction {
-        address to;
-        uint256 value;
-        bytes data;
-        bool executed;
-        uint256 confirmations;
-        uint256 submissionTime;
-        uint256 executionTime;
+        address target;
+        uint256 ethAmount;
+        bytes callData;
+        bool wasExecuted;
+        uint256 approvalCount;
+        uint256 createdAt;
+        uint256 executableAt;
     }
 
-    address[] public owners;
-    mapping(address => bool) public isOwner;
+    address[] public council;
+    mapping(address => bool) public isCouncilMember;
 
-    uint256 public threshold;
-    mapping(uint256 => mapping(address => bool)) public confirmed;
-    mapping(uint256 => Transaction) public transactions;
+    uint256 public approvalsRequired;
+    mapping(uint256 => mapping(address => bool)) public hasApproved;
+    mapping(uint256 => Transaction) public queuedActions;
 
-    uint256 public txCount;
-    mapping(address => uint256) public balances;
+    uint256 public actionNonce;
+    mapping(address => uint256) public accountLedger;
 
-    bytes32 public merkleRoot;
-    mapping(address => bool) public claimed;
+    bytes32 public payoutRoot;
+    mapping(address => bool) public hasClaimedPayout;
 
-    uint256 public constant TIMELOCK_DURATION = 1 hours;
-    uint256 public totalVaultValue;
+    uint256 public constant EXECUTION_DELAY = 1 hours;
+    uint256 public trackedVaultBalance;
 
-    bool public paused;
-    bool private _entered;
+    bool public isHalted;
+    bool private reentryGuardLocked;
 
     event Deposit(address indexed depositor, uint256 amount);
     event Withdrawal(address indexed withdrawer, uint256 amount);
@@ -58,39 +58,39 @@ contract EvictionVaultBase {
     }
 
     function _onlyOwner() internal view {
-        require(isOwner[msg.sender], "only owner");
+        require(isCouncilMember[msg.sender], "only owner");
     }
 
     function _whenNotPaused() internal view {
-        require(!paused, "paused");
+        require(!isHalted, "paused");
     }
 
     function _nonReentrantBefore() internal {
-        require(!_entered, "reentrant call");
-        _entered = true;
+        require(!reentryGuardLocked, "reentrant call");
+        reentryGuardLocked = true;
     }
 
     function _nonReentrantAfter() internal {
-        _entered = false;
+        reentryGuardLocked = false;
     }
 
-    constructor(address[] memory _owners, uint256 _threshold) payable {
-        require(_owners.length > 0, "no owners");
-        require(_threshold > 0 && _threshold <= _owners.length, "invalid threshold");
+    constructor(address[] memory initialCouncil, uint256 minApprovals) payable {
+        require(initialCouncil.length > 0, "no owners");
+        require(minApprovals > 0 && minApprovals <= initialCouncil.length, "invalid threshold");
 
-        threshold = _threshold;
+        approvalsRequired = minApprovals;
 
-        for (uint i = 0; i < _owners.length; i++) {
-            address o = _owners[i];
-            require(o != address(0), "invalid owner");
-            require(!isOwner[o], "duplicate owner");
-            isOwner[o] = true;
-            owners.push(o);
+        for (uint i = 0; i < initialCouncil.length; i++) {
+            address member = initialCouncil[i];
+            require(member != address(0), "invalid owner");
+            require(!isCouncilMember[member], "duplicate owner");
+            isCouncilMember[member] = true;
+            council.push(member);
         }
-        totalVaultValue = msg.value;
+        trackedVaultBalance = msg.value;
     }
 
     function getOwners() external view returns (address[] memory) {
-        return owners;
+        return council;
     }
 }

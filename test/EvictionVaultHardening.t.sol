@@ -21,12 +21,12 @@ contract EvictionVaultHardeningTest is Test {
         vm.deal(user1, 10 ether);
         vm.deal(user2, 10 ether);
 
-        address[] memory owners = new address[](3);
-        owners[0] = owner1;
-        owners[1] = owner2;
-        owners[2] = owner3;
+        address[] memory council = new address[](3);
+        council[0] = owner1;
+        council[1] = owner2;
+        council[2] = owner3;
 
-        vault = new EvictionVault{value: 10 ether}(owners, 2);
+        vault = new EvictionVault{value: 10 ether}(council, 2);
     }
 
     // Test 1: Merkle root can only be set by owner (FIX: was public)
@@ -36,7 +36,7 @@ contract EvictionVaultHardeningTest is Test {
         // Owner should succeed
         vm.prank(owner1);
         vault.setMerkleRoot(newRoot);
-        assert(vault.merkleRoot() == newRoot);
+        assert(vault.payoutRoot() == newRoot);
 
         // Non-owner should fail
         vm.prank(user1);
@@ -68,12 +68,12 @@ contract EvictionVaultHardeningTest is Test {
         // Owner can pause
         vm.prank(owner1);
         vault.pause();
-        assert(vault.paused());
+        assert(vault.isHalted());
 
         // Owner can unpause
         vm.prank(owner1);
         vault.unpause();
-        assert(!vault.paused());
+        assert(!vault.isHalted());
 
         // Non-owner cannot pause
         vm.prank(user1);
@@ -87,7 +87,7 @@ contract EvictionVaultHardeningTest is Test {
         vm.prank(user1);
         (bool success, ) = address(vault).call{value: 1 ether}("");
         assert(success);
-        assert(vault.balances(user1) == 1 ether);
+        assert(vault.accountLedger(user1) == 1 ether);
     }
 
     // Test 5: withdraw uses call pattern, not transfer (FIX: was .transfer())
@@ -100,7 +100,7 @@ contract EvictionVaultHardeningTest is Test {
         vm.prank(user1);
         vault.withdraw(2 ether);
         
-        assert(vault.balances(user1) == 0);
+        assert(vault.accountLedger(user1) == 0);
         assert(user1.balance == beforeBalance);
     }
 
@@ -119,7 +119,7 @@ contract EvictionVaultHardeningTest is Test {
         vm.prank(user1);
         vault.claim(proof, 1 ether);
         
-        assert(vault.claimed(user1));
+        assert(vault.hasClaimedPayout(user1));
         assert(user1.balance == beforeBalance + 1 ether);
     }
 
@@ -129,20 +129,20 @@ contract EvictionVaultHardeningTest is Test {
         vm.prank(owner1);
         vault.submitTransaction(user1, 1 ether, "");
         
-        // Confirm by owner2 (now 2 confirmations = threshold)
+        // Confirm by owner2 (now 2 approvalCount = approvalsRequired)
         vm.prank(owner2);
         vault.confirmTransaction(0);
         
-        // executionTime should be set
-        (,,,,,, uint256 executionTime) = vault.transactions(0);
-        assert(executionTime > block.timestamp);
+        // executableAt should be set
+        (,,,,,, uint256 executableAt) = vault.queuedActions(0);
+        assert(executableAt > block.timestamp);
 
         // Execution before timelock should fail
         vm.expectRevert("timelock not reached");
         vault.executeTransaction(0);
 
         // Wait for timelock
-        vm.warp(executionTime + 1);
+        vm.warp(executableAt + 1);
         
         // Now execution should succeed
         vault.executeTransaction(0);
@@ -161,7 +161,7 @@ contract EvictionVaultHardeningTest is Test {
         vault.withdraw(1 ether);
     }
 
-    // Test 9: Multi-sig threshold enforcement
+    // Test 9: Multi-sig approvalsRequired enforcement
     function testMultisigThreshold() public {
         vm.prank(owner1);
         vault.submitTransaction(user1, 1 ether, "");
@@ -174,8 +174,8 @@ contract EvictionVaultHardeningTest is Test {
         vm.prank(owner2);
         vault.confirmTransaction(0);
 
-        (,,,, uint256 confirmations,,) = vault.transactions(0);
-        assert(confirmations == 2);
+        (,,,, uint256 approvalCount,,) = vault.queuedActions(0);
+        assert(approvalCount == 2);
     }
 
     // Test 10: Verify signature works (improved from original)

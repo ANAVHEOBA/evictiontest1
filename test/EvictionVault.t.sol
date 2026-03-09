@@ -8,8 +8,8 @@ contract PayableReceiver {
     uint256 public totalReceived;
     uint256 public lastArg;
 
-    function store(uint256 value) external payable {
-        lastArg = value;
+    function store(uint256 ethAmount) external payable {
+        lastArg = ethAmount;
         totalReceived += msg.value;
     }
 }
@@ -39,74 +39,74 @@ contract EvictionVaultTest is Test {
         vm.deal(owner3, 10 ether);
         vm.deal(user, 20 ether);
 
-        address[] memory owners = new address[](3);
-        owners[0] = owner1;
-        owners[1] = owner2;
-        owners[2] = owner3;
+        address[] memory council = new address[](3);
+        council[0] = owner1;
+        council[1] = owner2;
+        council[2] = owner3;
 
-        vault = new EvictionVault{value: 5 ether}(owners, 2);
+        vault = new EvictionVault{value: 5 ether}(council, 2);
         receiver = new PayableReceiver();
     }
 
     function testConstructorInitialState() public view {
-        assertEq(vault.threshold(), 2);
-        assertEq(vault.txCount(), 0);
-        assertEq(vault.totalVaultValue(), 5 ether);
+        assertEq(vault.approvalsRequired(), 2);
+        assertEq(vault.actionNonce(), 0);
+        assertEq(vault.trackedVaultBalance(), 5 ether);
         assertEq(address(vault).balance, 5 ether);
-        assertTrue(vault.isOwner(owner1));
-        assertTrue(vault.isOwner(owner2));
-        assertTrue(vault.isOwner(owner3));
+        assertTrue(vault.isCouncilMember(owner1));
+        assertTrue(vault.isCouncilMember(owner2));
+        assertTrue(vault.isCouncilMember(owner3));
     }
 
     function testConstructorRevertNoOwners() public {
-        address[] memory owners = new address[](0);
+        address[] memory council = new address[](0);
         vm.expectRevert("no owners");
-        new EvictionVault(owners, 1);
+        new EvictionVault(council, 1);
     }
 
     function testConstructorRevertInvalidThreshold() public {
-        address[] memory owners = new address[](2);
-        owners[0] = owner1;
-        owners[1] = owner2;
+        address[] memory council = new address[](2);
+        council[0] = owner1;
+        council[1] = owner2;
 
         vm.expectRevert("invalid threshold");
-        new EvictionVault(owners, 0);
+        new EvictionVault(council, 0);
 
         vm.expectRevert("invalid threshold");
-        new EvictionVault(owners, 3);
+        new EvictionVault(council, 3);
     }
 
     function testConstructorRevertZeroOwner() public {
-        address[] memory owners = new address[](2);
-        owners[0] = owner1;
-        owners[1] = address(0);
+        address[] memory council = new address[](2);
+        council[0] = owner1;
+        council[1] = address(0);
 
         vm.expectRevert("invalid owner");
-        new EvictionVault(owners, 1);
+        new EvictionVault(council, 1);
     }
 
     function testConstructorRevertDuplicateOwner() public {
-        address[] memory owners = new address[](2);
-        owners[0] = owner1;
-        owners[1] = owner1;
+        address[] memory council = new address[](2);
+        council[0] = owner1;
+        council[1] = owner1;
 
         vm.expectRevert("duplicate owner");
-        new EvictionVault(owners, 1);
+        new EvictionVault(council, 1);
     }
 
     function testDepositAndReceiveUpdateBalances() public {
         vm.prank(user);
         vault.deposit{value: 2 ether}();
 
-        assertEq(vault.balances(user), 2 ether);
-        assertEq(vault.totalVaultValue(), 7 ether);
+        assertEq(vault.accountLedger(user), 2 ether);
+        assertEq(vault.trackedVaultBalance(), 7 ether);
 
         vm.prank(user);
         (bool ok,) = address(vault).call{value: 1 ether}("");
         assertTrue(ok);
 
-        assertEq(vault.balances(user), 3 ether);
-        assertEq(vault.totalVaultValue(), 8 ether);
+        assertEq(vault.accountLedger(user), 3 ether);
+        assertEq(vault.trackedVaultBalance(), 8 ether);
         assertEq(address(vault).balance, 8 ether);
     }
 
@@ -118,8 +118,8 @@ contract EvictionVaultTest is Test {
         vm.prank(user);
         vault.withdraw(1.5 ether);
 
-        assertEq(vault.balances(user), 0.5 ether);
-        assertEq(vault.totalVaultValue(), 5.5 ether);
+        assertEq(vault.accountLedger(user), 0.5 ether);
+        assertEq(vault.trackedVaultBalance(), 5.5 ether);
         assertEq(user.balance, userBefore + 1.5 ether);
     }
 
@@ -148,7 +148,7 @@ contract EvictionVaultTest is Test {
 
         vm.prank(owner1);
         vault.pause();
-        assertTrue(vault.paused());
+        assertTrue(vault.isHalted());
 
         vm.prank(user);
         vm.expectRevert("only owner");
@@ -156,7 +156,7 @@ contract EvictionVaultTest is Test {
 
         vm.prank(owner2);
         vault.unpause();
-        assertFalse(vault.paused());
+        assertFalse(vault.isHalted());
     }
 
     function testEmergencyWithdrawAllSuccess() public {
@@ -171,7 +171,7 @@ contract EvictionVaultTest is Test {
 
         assertEq(owner1.balance, ownerBefore + amount);
         assertEq(address(vault).balance, 0);
-        assertEq(vault.totalVaultValue(), 0);
+        assertEq(vault.trackedVaultBalance(), 0);
     }
 
     function testEmergencyWithdrawAllRevertOnlyOwner() public {
@@ -181,11 +181,11 @@ contract EvictionVaultTest is Test {
     }
 
     function testEmergencyWithdrawAllRevertWhenEmpty() public {
-        address[] memory owners = new address[](2);
-        owners[0] = owner1;
-        owners[1] = owner2;
+        address[] memory council = new address[](2);
+        council[0] = owner1;
+        council[1] = owner2;
 
-        EvictionVault emptyVault = new EvictionVault(owners, 2);
+        EvictionVault emptyVault = new EvictionVault(council, 2);
 
         vm.prank(owner1);
         vm.expectRevert("empty vault");
@@ -202,7 +202,7 @@ contract EvictionVaultTest is Test {
         vm.prank(owner1);
         vault.setMerkleRoot(root);
 
-        assertEq(vault.merkleRoot(), root);
+        assertEq(vault.payoutRoot(), root);
     }
 
     function testClaimSuccess() public {
@@ -221,9 +221,9 @@ contract EvictionVaultTest is Test {
         vm.prank(user);
         vault.claim(proof, amount);
 
-        assertTrue(vault.claimed(user));
+        assertTrue(vault.hasClaimedPayout(user));
         assertEq(user.balance, userBefore + amount);
-        assertEq(vault.totalVaultValue(), 4 ether);
+        assertEq(vault.trackedVaultBalance(), 4 ether);
     }
 
     function testClaimRevertInvalidProof() public {
@@ -270,31 +270,31 @@ contract EvictionVaultTest is Test {
     }
 
     function testSubmitTransactionAndStoreData() public {
-        bytes memory data = abi.encodeWithSelector(PayableReceiver.store.selector, 42);
+        bytes memory callData = abi.encodeWithSelector(PayableReceiver.store.selector, 42);
 
         vm.prank(owner1);
-        vault.submitTransaction(address(receiver), 1 ether, data);
+        vault.submitTransaction(address(receiver), 1 ether, callData);
 
-        assertEq(vault.txCount(), 1);
-        assertTrue(vault.confirmed(0, owner1));
+        assertEq(vault.actionNonce(), 1);
+        assertTrue(vault.hasApproved(0, owner1));
 
         (
-            address to,
-            uint256 value,
+            address target,
+            uint256 ethAmount,
             bytes memory storedData,
-            bool executed,
-            uint256 confirmations,
-            uint256 submissionTime,
-            uint256 executionTime
-        ) = vault.transactions(0);
+            bool wasExecuted,
+            uint256 approvalCount,
+            uint256 createdAt,
+            uint256 executableAt
+        ) = vault.queuedActions(0);
 
-        assertEq(to, address(receiver));
-        assertEq(value, 1 ether);
-        assertEq(storedData, data);
-        assertFalse(executed);
-        assertEq(confirmations, 1);
-        assertEq(submissionTime, block.timestamp);
-        assertEq(executionTime, 0);
+        assertEq(target, address(receiver));
+        assertEq(ethAmount, 1 ether);
+        assertEq(storedData, callData);
+        assertFalse(wasExecuted);
+        assertEq(approvalCount, 1);
+        assertEq(createdAt, block.timestamp);
+        assertEq(executableAt, 0);
     }
 
     function testSubmitTransactionRevertOnlyOwner() public {
@@ -313,15 +313,15 @@ contract EvictionVaultTest is Test {
         vm.prank(owner1);
         vault.submitTransaction(address(receiver), 0.1 ether, "");
 
-        uint256 expectedExecutionTime = block.timestamp + vault.TIMELOCK_DURATION();
+        uint256 expectedExecutionTime = block.timestamp + vault.EXECUTION_DELAY();
 
         vm.prank(owner2);
         vault.confirmTransaction(0);
 
-        (, , , , uint256 confirmations, , uint256 executionTime) = vault.transactions(0);
-        assertEq(confirmations, 2);
-        assertEq(executionTime, expectedExecutionTime);
-        assertTrue(vault.confirmed(0, owner2));
+        (, , , , uint256 approvalCount, , uint256 executableAt) = vault.queuedActions(0);
+        assertEq(approvalCount, 2);
+        assertEq(executableAt, expectedExecutionTime);
+        assertTrue(vault.hasApproved(0, owner2));
     }
 
     function testConfirmTransactionRevertAlreadyConfirmed() public {
@@ -364,23 +364,23 @@ contract EvictionVaultTest is Test {
     }
 
     function testExecuteTransactionSuccess() public {
-        bytes memory data = abi.encodeWithSelector(PayableReceiver.store.selector, 99);
-        uint256 vaultBefore = vault.totalVaultValue();
+        bytes memory callData = abi.encodeWithSelector(PayableReceiver.store.selector, 99);
+        uint256 vaultBefore = vault.trackedVaultBalance();
 
         vm.prank(owner1);
-        vault.submitTransaction(address(receiver), 1 ether, data);
+        vault.submitTransaction(address(receiver), 1 ether, callData);
 
         vm.prank(owner2);
         vault.confirmTransaction(0);
 
-        vm.warp(block.timestamp + vault.TIMELOCK_DURATION());
+        vm.warp(block.timestamp + vault.EXECUTION_DELAY());
         vault.executeTransaction(0);
 
-        (, , , bool executed, , , ) = vault.transactions(0);
-        assertTrue(executed);
+        (, , , bool wasExecuted, , , ) = vault.queuedActions(0);
+        assertTrue(wasExecuted);
         assertEq(receiver.totalReceived(), 1 ether);
         assertEq(receiver.lastArg(), 99);
-        assertEq(vault.totalVaultValue(), vaultBefore - 1 ether);
+        assertEq(vault.trackedVaultBalance(), vaultBefore - 1 ether);
     }
 
     function testExecuteTransactionRevertAlreadyExecuted() public {
@@ -390,7 +390,7 @@ contract EvictionVaultTest is Test {
         vm.prank(owner2);
         vault.confirmTransaction(0);
 
-        vm.warp(block.timestamp + vault.TIMELOCK_DURATION());
+        vm.warp(block.timestamp + vault.EXECUTION_DELAY());
         vault.executeTransaction(0);
 
         vm.expectRevert("already executed");
@@ -404,7 +404,7 @@ contract EvictionVaultTest is Test {
         vm.prank(owner2);
         vault.confirmTransaction(0);
 
-        vm.warp(block.timestamp + vault.TIMELOCK_DURATION());
+        vm.warp(block.timestamp + vault.EXECUTION_DELAY());
         vault.executeTransaction(0);
 
         vm.prank(owner3);
@@ -444,16 +444,16 @@ contract EvictionVaultTest is Test {
     }
 
     function testThresholdOneSetsTimelockOnSubmit() public {
-        address[] memory owners = new address[](1);
-        owners[0] = owner1;
-        EvictionVault single = new EvictionVault{value: 1 ether}(owners, 1);
+        address[] memory council = new address[](1);
+        council[0] = owner1;
+        EvictionVault single = new EvictionVault{value: 1 ether}(council, 1);
 
         vm.prank(owner1);
         single.submitTransaction(user, 0, "");
 
-        (, , , , uint256 confirmations, uint256 submissionTime, uint256 executionTime) = single.transactions(0);
-        assertEq(confirmations, 1);
-        assertEq(executionTime, submissionTime + single.TIMELOCK_DURATION());
+        (, , , , uint256 approvalCount, uint256 createdAt, uint256 executableAt) = single.queuedActions(0);
+        assertEq(approvalCount, 1);
+        assertEq(executableAt, createdAt + single.EXECUTION_DELAY());
     }
 
     function _hashPair(bytes32 a, bytes32 b) internal pure returns (bytes32) {

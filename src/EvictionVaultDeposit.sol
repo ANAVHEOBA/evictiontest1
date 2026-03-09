@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {EvictionVaultBase} from "./EvictionVaultBase.sol";
+import "./EvictionVaultBase.sol";
 
 contract EvictionVaultDeposit is EvictionVaultBase {
-    constructor(address[] memory _owners, uint256 _threshold) payable EvictionVaultBase(_owners, _threshold) {}
+    constructor(address[] memory initialCouncil, uint256 minApprovals) payable EvictionVaultBase(initialCouncil, minApprovals) {}
 
     receive() external payable {
         _creditDeposit(msg.sender, msg.value);
@@ -16,9 +16,9 @@ contract EvictionVaultDeposit is EvictionVaultBase {
 
     function withdraw(uint256 amount) external whenNotPaused nonReentrant {
         require(amount > 0, "zero amount");
-        require(balances[msg.sender] >= amount, "insufficient balance");
-        balances[msg.sender] -= amount;
-        totalVaultValue -= amount;
+        require(accountLedger[msg.sender] >= amount, "insufficient balance");
+        accountLedger[msg.sender] -= amount;
+        trackedVaultBalance -= amount;
 
         (bool success, ) = payable(msg.sender).call{value: amount}("");
         require(success, "transfer failed");
@@ -28,8 +28,8 @@ contract EvictionVaultDeposit is EvictionVaultBase {
 
     function _creditDeposit(address account, uint256 amount) internal {
         require(amount > 0, "zero amount");
-        balances[account] += amount;
-        totalVaultValue += amount;
+        accountLedger[account] += amount;
+        trackedVaultBalance += amount;
         emit Deposit(account, amount);
     }
 }

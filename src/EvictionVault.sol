@@ -4,26 +4,26 @@ pragma solidity ^0.8.20;
 import {EvictionVaultMultisig} from "./EvictionVaultMultisig.sol";
 
 contract EvictionVault is EvictionVaultMultisig {
-    constructor(address[] memory _owners, uint256 _threshold) payable EvictionVaultMultisig(_owners, _threshold) {}
+    constructor(address[] memory initialCouncil, uint256 minApprovals) payable EvictionVaultMultisig(initialCouncil, minApprovals) {}
 
     function emergencyWithdrawAll() external onlyOwner nonReentrant {
         uint256 balance = address(this).balance;
         require(balance > 0, "empty vault");
 
-        totalVaultValue = 0;
+        trackedVaultBalance = 0;
         (bool success, ) = payable(msg.sender).call{value: balance}("");
         require(success, "emergency withdraw failed");
     }
 
     function pause() external onlyOwner {
-        require(!paused, "already paused");
-        paused = true;
+        require(!isHalted, "already paused");
+        isHalted = true;
         emit Paused(msg.sender);
     }
 
     function unpause() external onlyOwner {
-        require(paused, "not paused");
-        paused = false;
+        require(isHalted, "not paused");
+        isHalted = false;
         emit Unpaused(msg.sender);
     }
 }
