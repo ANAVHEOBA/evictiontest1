@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./EvictionVaultBase.sol";
+import {EvictionVaultBase} from "./EvictionVaultBase.sol";
 
 contract EvictionVaultDeposit is EvictionVaultBase {
     constructor(address[] memory initialCouncil, uint256 minApprovals) payable EvictionVaultBase(initialCouncil, minApprovals) {}

@@ -1,66 +1,29 @@
-## Foundry
+# Nebula Yield - Eviction Vault Hardening (Phase 1, Day 1)
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This repository tracks the Day 1 hardening milestone for the Eviction Vault smart contract.
+The original monolithic contract was decomposed into a modular architecture with layered concerns.
+Primary goal: eliminate known critical issues and validate fixes with repeatable tests.
 
-Foundry consists of:
+## Day 1 Scope
+- Refactor single-file vault logic into a multi-file contract stack.
+- Preserve functional behavior while improving safety and maintainability.
+- Address critical issues around authorization, fund flow, and execution gating.
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Critical Areas Addressed
+- `setMerkleRoot` restricted to authorized council members.
+- `emergencyWithdrawAll` restricted to authorized council members.
+- Removed `tx.origin` dependency in `receive()` accounting.
+- Replaced fragile transfer patterns with safe `call` handling.
+- Enforced timelock requirements in multisig execution flow.
+- Added pause-state enforcement across sensitive operations.
 
-## Documentation
+## Deliverables Implemented
+- Modular contracts under `src/` with clear responsibility boundaries.
+- OpenZeppelin cryptography integration (`MerkleProof` and `ECDSA`).
+- Comprehensive unit/hardening tests and invariant property tests.
+- Successful `forge build`, `forge test`, gas report, and gas snapshot.
 
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+## Acceptance Status
+- Contract is no longer a single-file monolith.
+- Listed Day 1 vulnerabilities are implemented and covered by tests.
+- Positive and negative test paths pass in local Foundry runs.
