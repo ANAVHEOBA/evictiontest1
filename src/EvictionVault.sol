@@ -3,7 +3,9 @@ pragma solidity ^0.8.20;
 
 import {EvictionVaultMultisig} from "./EvictionVaultMultisig.sol";
 
+// name of contract is EvictionVault and it import EvictionVaultMultisig
 contract EvictionVault is EvictionVaultMultisig {
+    // the constructor takes in 2 inputs 
     constructor(address[] memory initialCouncil, uint256 minApprovals) payable EvictionVaultMultisig(initialCouncil, minApprovals) {}
 
     function emergencyWithdrawAll() external onlyOwner nonReentrant {
