@@ -52,10 +52,9 @@ contract EvictionVaultBase {
     }
 
     modifier nonReentrant() {
-        require(!_entered, "reentrant call");
-        _entered = true;
+        _nonReentrantBefore();
         _;
-        _entered = false;
+        _nonReentrantAfter();
     }
 
     function _onlyOwner() internal view {
@@ -64,6 +63,15 @@ contract EvictionVaultBase {
 
     function _whenNotPaused() internal view {
         require(!paused, "paused");
+    }
+
+    function _nonReentrantBefore() internal {
+        require(!_entered, "reentrant call");
+        _entered = true;
+    }
+
+    function _nonReentrantAfter() internal {
+        _entered = false;
     }
 
     constructor(address[] memory _owners, uint256 _threshold) payable {
