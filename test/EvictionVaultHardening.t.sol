@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import "../src/EvictionVault.sol";
 
-contract EvictionVaultTest is Test {
+contract EvictionVaultHardeningTest is Test {
     EvictionVault vault;
     address owner1;
     address owner2;
@@ -18,6 +18,8 @@ contract EvictionVaultTest is Test {
         owner3 = address(0x3333);
         user1 = address(0x4444);
         user2 = address(0x5555);
+        vm.deal(user1, 10 ether);
+        vm.deal(user2, 10 ether);
 
         address[] memory owners = new address[](3);
         owners[0] = owner1;
@@ -91,6 +93,7 @@ contract EvictionVaultTest is Test {
     // Test 5: withdraw uses call pattern, not transfer (FIX: was .transfer())
     function testWithdrawUsesCall() public {
         // Deposit then withdraw
+        uint256 beforeBalance = user1.balance;
         vm.prank(user1);
         vault.deposit{value: 2 ether}();
         
@@ -98,7 +101,7 @@ contract EvictionVaultTest is Test {
         vault.withdraw(2 ether);
         
         assert(vault.balances(user1) == 0);
-        assert(user1.balance == 2 ether);
+        assert(user1.balance == beforeBalance);
     }
 
     // Test 6: claim uses call pattern, not transfer (FIX: was .transfer())
@@ -112,11 +115,12 @@ contract EvictionVaultTest is Test {
         bytes32[] memory proof = new bytes32[](1);
         proof[0] = leaf;
 
+        uint256 beforeBalance = user1.balance;
         vm.prank(user1);
         vault.claim(proof, 1 ether);
         
         assert(vault.claimed(user1));
-        assert(user1.balance == 1 ether);
+        assert(user1.balance == beforeBalance + 1 ether);
     }
 
     // Test 7: Timelock execution enforced
@@ -175,7 +179,7 @@ contract EvictionVaultTest is Test {
     }
 
     // Test 10: Verify signature works (improved from original)
-    function testVerifySignature() public {
+    function testVerifySignature() public view {
         bytes32 messageHash = keccak256(abi.encodePacked("test message"));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(1, messageHash);
         

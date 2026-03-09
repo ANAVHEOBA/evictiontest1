@@ -3,35 +3,12 @@ pragma solidity ^0.8.20;
 
 import {EvictionVaultDeposit} from "./EvictionVaultDeposit.sol";
 
-// name of the contract which is called EvictionVaultMerkle and the import is EvictionVaultDeposit
 contract EvictionVaultMerkle is EvictionVaultDeposit {
-
-    // a constructor is used here where the address list is stored in memory and the name of the variable to store it is _owners
-    // and the threshold just like the critical value has a datatype of an unsigned integer 256
-    constructor(address[] memory _owners, uint256 _threshold) 
-        // to make the address 
-        payable 
-        EvictionVaultDeposit(_owners, _threshold) 
-    {}
+    constructor(address[] memory _owners, uint256 _threshold) payable EvictionVaultDeposit(_owners, _threshold) {}
 
     function setMerkleRoot(bytes32 root) external onlyOwner {
         merkleRoot = root;
         emit MerkleRootSet(root);
-    }
-
-    function _verifyMerkleProof(
-        bytes32[] calldata proof,
-        bytes32 leaf
-    ) internal view returns (bool) {
-        bytes32 computed = leaf;
-        for (uint i = 0; i < proof.length; i++) {
-            computed = _hashPair(computed, proof[i]);
-        }
-        return computed == merkleRoot;
-    }
-
-    function _hashPair(bytes32 a, bytes32 b) internal pure returns (bytes32) {
-        return a < b ? keccak256(abi.encodePacked(a, b)) : keccak256(abi.encodePacked(b, a));
     }
 
     function _leaf(address account, uint256 amount) internal pure returns (bytes32 leaf) {
@@ -42,17 +19,32 @@ contract EvictionVaultMerkle is EvictionVaultDeposit {
         }
     }
 
-    function claim(bytes32[] calldata proof, uint256 amount) external whenNotPaused {
+    function _hashPair(bytes32 a, bytes32 b) internal pure returns (bytes32) {
+        return a < b ? keccak256(abi.encodePacked(a, b)) : keccak256(abi.encodePacked(b, a));
+    }
+
+    function _verifyProof(bytes32[] calldata proof, bytes32 leaf) internal view returns (bool) {
+        bytes32 computed = leaf;
+        for (uint256 i = 0; i < proof.length; i++) {
+            computed = _hashPair(computed, proof[i]);
+        }
+        return computed == merkleRoot;
+    }
+
+    function claim(bytes32[] calldata proof, uint256 amount) external whenNotPaused nonReentrant {
+        require(amount > 0, "zero amount");
+
         bytes32 leaf = _leaf(msg.sender, amount);
-        require(_verifyMerkleProof(proof, leaf), "invalid proof");
+        require(_verifyProof(proof, leaf), "invalid proof");
         require(!claimed[msg.sender], "already claimed");
-        
+        require(totalVaultValue >= amount, "insufficient vault value");
+
         claimed[msg.sender] = true;
         totalVaultValue -= amount;
-        
+
         (bool success, ) = payable(msg.sender).call{value: amount}("");
         require(success, "claim transfer failed");
-        
+
         emit Claim(msg.sender, amount);
     }
 
@@ -61,21 +53,21 @@ contract EvictionVaultMerkle is EvictionVaultDeposit {
         bytes32 messageHash,
         bytes memory signature
     ) external pure returns (bool) {
+        if (signature.length != 65) return false;
+
         bytes32 r;
         bytes32 s;
         uint8 v;
-        
-        if (signature.length != 65) return false;
-        
+
         assembly {
             r := mload(add(signature, 0x20))
             s := mload(add(signature, 0x40))
             v := byte(0, mload(add(signature, 0x60)))
         }
-        
+
         if (v < 27) v += 27;
         if (v != 27 && v != 28) return false;
-        
+
         address recovered = ecrecover(messageHash, v, r, s);
         return recovered == signer;
     }

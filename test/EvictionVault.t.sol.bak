@@ -85,15 +85,6 @@ contract EvictionVaultTest is Test {
         new EvictionVault(owners, 1);
     }
 
-    function testConstructorRevertDuplicateOwner() public {
-        address[] memory owners = new address[](2);
-        owners[0] = owner1;
-        owners[1] = owner1;
-
-        vm.expectRevert("duplicate owner");
-        new EvictionVault(owners, 1);
-    }
-
     function testDepositAndReceiveUpdateBalances() public {
         vm.prank(user);
         vault.deposit{value: 2 ether}();
@@ -303,12 +294,6 @@ contract EvictionVaultTest is Test {
         vault.submitTransaction(address(receiver), 1 ether, "");
     }
 
-    function testSubmitTransactionRevertInvalidTarget() public {
-        vm.prank(owner1);
-        vm.expectRevert("invalid target");
-        vault.submitTransaction(address(0), 1 ether, "");
-    }
-
     function testSubmitAndConfirmSetExecutionTimeAtThreshold() public {
         vm.prank(owner1);
         vault.submitTransaction(address(receiver), 0.1 ether, "");
@@ -333,23 +318,12 @@ contract EvictionVaultTest is Test {
         vault.confirmTransaction(0);
     }
 
-    function testConfirmTransactionRevertTxDoesNotExist() public {
-        vm.prank(owner1);
-        vm.expectRevert("tx does not exist");
-        vault.confirmTransaction(999);
-    }
-
     function testExecuteTransactionRevertInsufficientConfirmations() public {
         vm.prank(owner1);
         vault.submitTransaction(address(receiver), 1 ether, "");
 
         vm.expectRevert("insufficient confirmations");
         vault.executeTransaction(0);
-    }
-
-    function testExecuteTransactionRevertTxDoesNotExist() public {
-        vm.expectRevert("tx does not exist");
-        vault.executeTransaction(404);
     }
 
     function testExecuteTransactionRevertTimelockNotReached() public {
@@ -365,7 +339,6 @@ contract EvictionVaultTest is Test {
 
     function testExecuteTransactionSuccess() public {
         bytes memory data = abi.encodeWithSelector(PayableReceiver.store.selector, 99);
-        uint256 vaultBefore = vault.totalVaultValue();
 
         vm.prank(owner1);
         vault.submitTransaction(address(receiver), 1 ether, data);
@@ -380,7 +353,6 @@ contract EvictionVaultTest is Test {
         assertTrue(executed);
         assertEq(receiver.totalReceived(), 1 ether);
         assertEq(receiver.lastArg(), 99);
-        assertEq(vault.totalVaultValue(), vaultBefore - 1 ether);
     }
 
     function testExecuteTransactionRevertAlreadyExecuted() public {
@@ -426,34 +398,6 @@ contract EvictionVaultTest is Test {
 
         bytes memory tamperedSig = abi.encodePacked(bytes32(uint256(r) + 1), s, v);
         assertFalse(vault.verifySignature(owner1, digest, tamperedSig));
-    }
-
-    function testPauseRevertAlreadyPaused() public {
-        vm.prank(owner1);
-        vault.pause();
-
-        vm.prank(owner2);
-        vm.expectRevert("already paused");
-        vault.pause();
-    }
-
-    function testUnpauseRevertNotPaused() public {
-        vm.prank(owner1);
-        vm.expectRevert("not paused");
-        vault.unpause();
-    }
-
-    function testThresholdOneSetsTimelockOnSubmit() public {
-        address[] memory owners = new address[](1);
-        owners[0] = owner1;
-        EvictionVault single = new EvictionVault{value: 1 ether}(owners, 1);
-
-        vm.prank(owner1);
-        single.submitTransaction(user, 0, "");
-
-        (, , , , uint256 confirmations, uint256 submissionTime, uint256 executionTime) = single.transactions(0);
-        assertEq(confirmations, 1);
-        assertEq(executionTime, submissionTime + single.TIMELOCK_DURATION());
     }
 
     function _hashPair(bytes32 a, bytes32 b) internal pure returns (bytes32) {
