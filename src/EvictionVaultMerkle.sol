@@ -3,9 +3,13 @@ pragma solidity ^0.8.20;
 
 import {EvictionVaultDeposit} from "./EvictionVaultDeposit.sol";
 
+// name of the contract which is called EvictionVaultMerkle and the import is EvictionVaultDeposit
 contract EvictionVaultMerkle is EvictionVaultDeposit {
 
+    // a constructor is used here where the address list is stored in memory and the name of the variable to store it is _owners
+    // and the threshold just like the critical value has a datatype of an unsigned integer 256
     constructor(address[] memory _owners, uint256 _threshold) 
+        // to make the address 
         payable 
         EvictionVaultDeposit(_owners, _threshold) 
     {}

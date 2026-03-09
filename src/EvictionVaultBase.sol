@@ -24,12 +24,12 @@ contract EvictionVaultBase {
 
     bytes32 public merkleRoot;
     mapping(address => bool) public claimed;
-    mapping(bytes32 => bool) public usedHashes;
 
     uint256 public constant TIMELOCK_DURATION = 1 hours;
     uint256 public totalVaultValue;
 
     bool public paused;
+    bool private _entered;
 
     event Deposit(address indexed depositor, uint256 amount);
     event Withdrawal(address indexed withdrawer, uint256 amount);
@@ -51,6 +51,13 @@ contract EvictionVaultBase {
         _;
     }
 
+    modifier nonReentrant() {
+        require(!_entered, "reentrant call");
+        _entered = true;
+        _;
+        _entered = false;
+    }
+
     function _onlyOwner() internal view {
         require(isOwner[msg.sender], "only owner");
     }
@@ -62,12 +69,13 @@ contract EvictionVaultBase {
     constructor(address[] memory _owners, uint256 _threshold) payable {
         require(_owners.length > 0, "no owners");
         require(_threshold > 0 && _threshold <= _owners.length, "invalid threshold");
-        
+
         threshold = _threshold;
 
         for (uint i = 0; i < _owners.length; i++) {
             address o = _owners[i];
             require(o != address(0), "invalid owner");
+            require(!isOwner[o], "duplicate owner");
             isOwner[o] = true;
             owners.push(o);
         }

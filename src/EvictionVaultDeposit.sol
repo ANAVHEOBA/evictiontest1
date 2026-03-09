@@ -48,15 +48,24 @@ contract EvictionVaultDeposit is EvictionVaultBase {
 
 
     // now the function to withdraw 
-    // and the amount to withdraw is taken as an input which has a datatype and variable n
+    // and the amount to withdraw is taken as an input which has a datatype and name of the variable is amount
+    // and the visibilty is externa; 
+    // and the response whenNotPaused
     function withdraw(uint256 amount) external whenNotPaused {
+        // if the balances of the person calling the function has a balance that greater than the amount or equal to the amount that being requested 
+        // and if that condition is not met show insufficient balance as the response
         require(balances[msg.sender] >= amount, "insufficient balance");
+        // now the balances of the person calling the function - amount to get the final balance of the msg.sender(person calling the function)
         balances[msg.sender] -= amount;
+        // now the (totalVaultValue)i - amount = (totalVaultValue)f
         totalVaultValue -= amount;
-        
+        // payable(msg.sender) make an address to be able to receive tokens 
+        // call{value: amount} the amount that address is to receive 
+        // (bool success, ) the successful response if the transaction goes through 
         (bool success, ) = payable(msg.sender).call{value: amount}("");
+        // if the withdraw was not successful show this response transfer failed
         require(success, "transfer failed");
-        
+        // the name of the event Withdrawal and the the person calling the function and the amount was withdrawn
         emit Withdrawal(msg.sender, amount);
     }
 
